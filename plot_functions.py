@@ -288,7 +288,7 @@ def plot_tyre_strategies(session: fastf1.core.Session, save:bool = False) -> Non
 
                 start_stint_lapnum = np.min(stint_laps['LapNumber'])
                 end_stint_lapnum = np.max(stint_laps['LapNumber'])
-                stint_num_laps = end_stint_lapnum - start_stint_lapnum
+                stint_num_laps = end_stint_lapnum - start_stint_lapnum + 1
                 start_stint_lap = stint_laps.loc[stint_laps['LapNumber']==start_stint_lapnum, :]
                 end_stint_lap = stint_laps.loc[stint_laps['LapNumber']==end_stint_lapnum, :]
                 start_stint_time = start_stint_lap["LapStartTime"] if np.isnan(start_stint_lap["PitOutTime"].values[0]) else start_stint_lap["PitOutTime"]
@@ -340,9 +340,9 @@ def plot_tyre_strategies(session: fastf1.core.Session, save:bool = False) -> Non
                 )
 
                 y_text = stint['driver']
-                x_text = stint['data']['start_stint_lap']-1 + (stint['data']['stint_num_laps']+1)/2
+                x_text = stint['data']['start_stint_lap']-1 + (stint['data']['stint_num_laps'])/2
                 plt.scatter(y=y_text, x=x_text, color='lightgrey', s=200)
-                plt.text(y=y_text, x=x_text, s = int(stint['data']['stint_num_laps']+1),
+                plt.text(y=y_text, x=x_text, s = int(stint['data']['stint_num_laps']),
                     va='center_baseline', ha='center', size='small', color='black')
 
                 plt.xlabel("Lap number")
@@ -357,6 +357,12 @@ def plot_tyre_strategies(session: fastf1.core.Session, save:bool = False) -> Non
                     fill=True,
                     hatch=stint['data']['hatching']
                 )
+
+                y_text = stint['driver']
+                x_text = stint['data']['start_stint_time'] + (stint['data']['stint_time'])/2
+                plt.scatter(y=y_text, x=x_text, color='lightgrey', s=200)
+                plt.text(y=y_text, x=x_text, s = int(stint['data']['stint_num_laps']),
+                    va='center_baseline', ha='center', size='small', color='black')
 
                 plt.xlabel("Session time (minutes)")
 
