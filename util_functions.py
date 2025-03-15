@@ -21,7 +21,8 @@ def fastest_laps_in_session(laps: Laps) -> Laps:
     list_fastest_laps = list()
     for drv in drivers:
         drvs_fastest_lap = laps.pick_drivers(drv).pick_fastest()
-        list_fastest_laps.append(drvs_fastest_lap)
+        if drvs_fastest_lap is not None: 
+            list_fastest_laps.append(drvs_fastest_lap)
     fastest_laps = Laps(list_fastest_laps).sort_values(by='LapTime').reset_index(drop=True)
 
     # calculate percent difference from fastest lap
