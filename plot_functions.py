@@ -1130,12 +1130,9 @@ async def plot_position_changes(session: fastf1.core.Session, highlight: str = '
         position_series = pd.concat([pd.Series([grid_pos]), driver_laps['Position']]).reset_index(drop=True)
         
         # color helper functions don't work for earlier years
-        if session.event.year in [2023, 2024]:
-            driver_style = fastf1.plotting.get_driver_style(driver, ["color", "linestyle"], session)
-            ax.plot(lap_series, position_series,
-                    label=driver, **driver_style, marker = 'o', markersize=4)
-        else:
-            ax.plot(lap_series, position_series, label=driver)
+        driver_style = fastf1.plotting.get_driver_style(driver, ["color", "linestyle"], session)
+        ax.plot(lap_series, position_series, label=driver, **driver_style, 
+                marker = 'o', markersize=4)
 
         ax.text(x=text_pos, y=position_series[0]+0.2, s=driver)
 
