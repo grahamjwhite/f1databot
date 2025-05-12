@@ -6,6 +6,30 @@ from fastf1.core import Session
 
 
 def get_session_results(session: Session, data_type: str):
+    """Fetch session results data from the Formula 1 website.
+
+    Retrieves various types of session data from the official F1 website based on the
+    specified data type. The function handles different data formats and cleans the
+    resulting DataFrame.
+
+    Args:
+        session (Session): The F1 session to get results for.
+        data_type (str): Type of data to retrieve. Options are:
+            - 'pit-stop-summary'
+            - 'race-result'
+            - 'sprint-results'
+            - 'fastest-laps'
+            - 'starting-grid'
+            - 'qualifying'
+            - 'sprint-qualifying'
+            - 'practice-3'
+            - 'practice-2'
+            - 'practice-1'
+
+    Returns:
+        pd.DataFrame: Cleaned DataFrame containing the requested session data.
+            For race and sprint results, includes only rows with valid points.
+    """
 
     # Possible data_types:
     # pit-stop-summary
@@ -59,6 +83,25 @@ def get_session_results(session: Session, data_type: str):
     return df
 
 def process_pit_stop_summary(raw_data: pd.DataFrame, session: Session):
+    """Process and clean pit stop summary data.
+
+    Processes raw pit stop data by:
+    - Extracting driver abbreviations
+    - Calculating cumulative pit stop times
+    - Converting time of day to session time
+    - Removing unnecessary columns
+
+    Args:
+        raw_data (pd.DataFrame): Raw pit stop data from get_session_results.
+        session (Session): The F1 session the data is from.
+
+    Returns:
+        pd.DataFrame: Processed pit stop data with:
+            - Driver abbreviations
+            - Cumulative pit stop times
+            - Session time for each stop
+            - Cleaned column structure
+    """
 
     raw_data["Abbreviation"] = raw_data.Driver.str.slice(start=-3)
     raw_data["cumu_time"] = raw_data.loc[:, ["Abbreviation", "Time"]].groupby('Abbreviation').cumsum()
@@ -71,13 +114,41 @@ def process_pit_stop_summary(raw_data: pd.DataFrame, session: Session):
     return raw_data
 
 def process_starting_grid(raw_data: pd.DataFrame):
- 
+    """Process and clean starting grid data.
+
+    Processes raw starting grid data by:
+    - Extracting driver abbreviations
+    - Removing unnecessary columns (driver numbers and full names)
+
+    Args:
+        raw_data (pd.DataFrame): Raw starting grid data from get_session_results.
+
+    Returns:
+        pd.DataFrame: Processed starting grid data with:
+            - Driver abbreviations
+            - Cleaned column structure
+    """
+
     raw_data["Abbreviation"] = raw_data.Driver.str.slice(start=-3)
     raw_data = raw_data[raw_data.columns.drop(["No", "Driver"])]
 
     return raw_data
 
 def process_race_result(raw_data: pd.DataFrame):
+    """Process and clean race result data.
+
+    Processes raw race result data by:
+    - Extracting driver abbreviations
+    - Removing unnecessary columns (driver numbers and full names)
+
+    Args:
+        raw_data (pd.DataFrame): Raw race result data from get_session_results.
+
+    Returns:
+        pd.DataFrame: Processed race result data with:
+            - Driver abbreviations
+            - Cleaned column structure
+    """
 
     raw_data["Abbreviation"] = raw_data.Driver.str.slice(start=-3)
     raw_data = raw_data[raw_data.columns.drop(["No", "Driver"])]
@@ -85,6 +156,20 @@ def process_race_result(raw_data: pd.DataFrame):
     return raw_data
 
 def process_qualifying_results(raw_data: pd.DataFrame):
+    """Process and clean qualifying results data.
+
+    Processes raw qualifying results data by:
+    - Extracting driver abbreviations
+    - Removing unnecessary columns (driver numbers and full names)
+
+    Args:
+        raw_data (pd.DataFrame): Raw qualifying results data from get_session_results.
+
+    Returns:
+        pd.DataFrame: Processed qualifying results data with:
+            - Driver abbreviations
+            - Cleaned column structure
+    """
 
     raw_data["Abbreviation"] = raw_data.Driver.str.slice(start=-3)
     raw_data = raw_data[raw_data.columns.drop(["No", "Driver"])]
