@@ -23,6 +23,16 @@ from constants import F1DATABOT_PLOT_CACHE
 
 
 def get_custom_driver_styles(chart_type: str = 'line') -> dict: 
+    """Get predefined style configurations for different chart types.
+
+    Args:
+        chart_type (str, optional): Type of chart to get styles for. Options are 'line', 'line_marker', 'bar', 'scatter'.
+            Defaults to 'line'.
+
+    Returns:
+        dict: Dictionary containing style configurations for the specified chart type.
+            Each style is a dictionary with matplotlib-compatible style parameters.
+    """
 
     style_dict = {
         'line': [
@@ -51,6 +61,14 @@ def get_custom_driver_styles(chart_type: str = 'line') -> dict:
 
 
 def check_plot_params(params: dict) -> dict:
+    """Validate and standardize plot parameters.
+
+    Args:
+        params (dict): Dictionary containing plot parameters to be checked.
+
+    Returns:
+        dict: Dictionary with standardized parameters. Driver codes are converted to uppercase.
+    """
 
     for param in params.keys():
         if param == 'driver1' or param == 'driver2':
@@ -60,6 +78,19 @@ def check_plot_params(params: dict) -> dict:
 
 
 def plot_weather(session: fastf1.core.Session, save: bool=False) -> None:
+    """Plot weather data for a Formula 1 session.
+
+    Creates a two-panel plot showing track temperature, air temperature, and rainfall
+    throughout the session.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to plot weather data for.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
 
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
 
@@ -96,6 +127,19 @@ def plot_weather(session: fastf1.core.Session, save: bool=False) -> None:
 
 
 def plot_track_layout(session: fastf1.core.Session, save:bool = False) -> None:
+    """Plot the track layout with corner markers for a Formula 1 circuit.
+
+    Creates a visualization of the track layout with numbered corners and their
+    positions marked. The track is rotated according to the circuit's orientation.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing track data.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
 
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
 
@@ -160,6 +204,19 @@ def plot_track_layout(session: fastf1.core.Session, save:bool = False) -> None:
 
 
 def plot_fastest_laps(session: fastf1.core.Session, save:bool = False) -> None:
+    """Plot the fastest lap times for all drivers in a session.
+
+    Creates a horizontal bar chart showing each driver's fastest lap time relative
+    to the session's fastest lap. Includes lap time deltas and absolute times.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
 
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
 
@@ -209,6 +266,19 @@ def plot_fastest_laps(session: fastf1.core.Session, save:bool = False) -> None:
 
 
 def plot_qualifying_fastest_laps(session: fastf1.core.Session, save:bool = False) -> None:
+    """Plot the fastest lap times for all drivers across Q1, Q2, and Q3 qualifying sessions.
+
+    Creates a three-panel plot showing each driver's fastest lap time in each qualifying
+    session, with times relative to the fastest lap in each session.
+
+    Args:
+        session (fastf1.core.Session): The F1 qualifying session to analyze.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
 
     q1, q2, q3 = session.laps.pick_quicklaps(threshold=1.15).split_qualifying_sessions()
     q1 = uf.fastest_laps_in_session(q1)
@@ -269,6 +339,20 @@ def plot_qualifying_fastest_laps(session: fastf1.core.Session, save:bool = False
     
 
 def plot_tyre_strategies(session: fastf1.core.Session, save:bool = False) -> None:
+    """Plot the tyre strategies used by all drivers during a session.
+
+    Creates a visualization showing each driver's tyre compounds and stint lengths
+    throughout the session. For race sessions, shows lap numbers; for other sessions,
+    shows session time.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
 
     fastf1.plotting.setup_mpl(misc_mpl_mods = False, color_scheme = 'fastf1')
 
@@ -395,6 +479,23 @@ def plot_tyre_strategies(session: fastf1.core.Session, save:bool = False) -> Non
 
 def plot_telemetry_comparison(session: fastf1.core.Session, driver1: str, driver2: str, 
                               lap:(int|None) = None, save:bool = False) -> None:
+    """Compare telemetry data between two drivers for a specific lap.
+
+    Creates a six-panel plot comparing speed, delta time, throttle, brake, DRS usage,
+    and gear selection between two drivers. Includes corner markers and lap times.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing the lap data.
+        driver1 (str): Three-letter driver code for the first driver.
+        driver2 (str): Three-letter driver code for the second driver.
+        lap (int|None, optional): Specific lap number to compare. If None, uses fastest lap.
+            Defaults to None.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
 
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
 
@@ -521,6 +622,28 @@ def plot_telemetry_comparison(session: fastf1.core.Session, driver1: str, driver
 
 def plot_corner_analysis(session: fastf1.core.Session, driver1: str, driver2: str, corner:int, lower_offset:int = 200,
                          upper_offset:int = 200, lap_number:(int|None) = None, save: bool = False) -> None:
+    """Analyze and compare how two drivers approach a specific corner.
+
+    Creates a detailed visualization of speed, driver actions, and time delta around
+    a specific corner, showing how each driver approaches and exits the corner.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing the lap data.
+        driver1 (str): Three-letter driver code for the first driver.
+        driver2 (str): Three-letter driver code for the second driver.
+        corner (int): Corner number to analyze.
+        lower_offset (int, optional): Distance in meters before the corner to include.
+            Defaults to 200.
+        upper_offset (int, optional): Distance in meters after the corner to include.
+            Defaults to 200.
+        lap_number (int|None, optional): Specific lap number to analyze. If None, uses fastest lap.
+            Defaults to None.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
     
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme = 'fastf1')
 
@@ -678,7 +801,19 @@ def plot_corner_analysis(session: fastf1.core.Session, driver1: str, driver2: st
 
 
 def plot_gears_on_track(session: fastf1.core.Session, save: bool = False) -> None:
+    """Visualize gear selection along the track layout.
 
+    Creates a color-coded visualization of the track showing which gear is used
+    at each point, using the fastest lap of the session.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing the lap data.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
     lap = session.laps.pick_fastest()
     tel = lap.get_car_data()
     pos = lap.get_pos_data()
@@ -719,7 +854,21 @@ def plot_gears_on_track(session: fastf1.core.Session, save: bool = False) -> Non
 
 
 def plot_speed_versus_laptime(session: fastf1.core.Session, trap_loc:(str|None), save: bool = False) -> None:
+    """Plot the relationship between speed and lap time for all drivers.
 
+    Creates a scatter plot comparing each driver's fastest lap time against their
+    speed at a specific location (finish line, speed trap, or maximum speed).
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+        trap_loc (str|None): Location to measure speed from. Options are:
+            'FL' for finish line, 'ST' for speed trap, or None for maximum speed.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
     fastf1.plotting.setup_mpl(mpl_timedelta_support=True, misc_mpl_mods=True, color_scheme='fastf1')
 
     laps = session.laps.pick_quicklaps(threshold=1.15)
@@ -794,7 +943,22 @@ def plot_speed_versus_laptime(session: fastf1.core.Session, trap_loc:(str|None),
 
 def plot_actions_on_track(session: fastf1.core.Session, driver: str,  
                           lap_number=None, save: bool = False) -> None:
+    """Visualize driver actions (throttle/brake) along the track layout.
 
+    Creates a color-coded visualization of the track showing when the driver is
+    braking, using full throttle, or using partial throttle.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing the lap data.
+        driver (str): Three-letter driver code for the driver to analyze.
+        lap_number (int|None, optional): Specific lap number to analyze. If None, uses fastest lap.
+            Defaults to None.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme = 'fastf1')
 
     # Get the laps and circuit info
@@ -899,7 +1063,19 @@ def plot_actions_on_track(session: fastf1.core.Session, driver: str,
 
 
 def plot_sector_performance(session: fastf1.core.Session, save:bool = False) -> None:
+    """Plot sector times for all drivers in a session.
 
+    Creates a three-panel plot showing each driver's sector times relative to
+    the fastest time in each sector.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
     laps = session.laps.pick_quicklaps(threshold=1.15)
 
     fastest_laps = uf.fastest_laps_in_session(laps)[['LapTime', 'Driver']]
@@ -1000,7 +1176,20 @@ def plot_sector_performance(session: fastf1.core.Session, save:bool = False) -> 
 
 
 def plot_actual_vs_ideal_laptimes(session: fastf1.core.Session, save: bool = False) -> None:    
+    """Compare actual fastest lap times with ideal lap times for all drivers.
 
+    Creates a two-panel plot showing:
+    1. Actual lap time gaps to the fastest driver
+    2. Ideal lap time gaps (sum of best sectors) and the difference to actual times
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
     fastf1.plotting.setup_mpl(misc_mpl_mods = False, color_scheme = 'fastf1')
 
     laps = session.laps.pick_quicklaps(threshold=1.15)
@@ -1088,7 +1277,21 @@ def plot_actual_vs_ideal_laptimes(session: fastf1.core.Session, save: bool = Fal
 
 
 async def plot_position_changes(session: fastf1.core.Session, highlight: str = '', save: bool = False) -> None:
+    """Plot the position changes of all drivers throughout a session.
 
+    Creates a line plot showing how each driver's position changes over the course
+    of the session, with optional highlighting of specific drivers.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+        highlight (str, optional): Comma-separated list of driver codes to highlight.
+            Defaults to '' (no highlighting).
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
 
     laps = uf.fix_positions(session.laps)
@@ -1154,7 +1357,21 @@ async def plot_position_changes(session: fastf1.core.Session, highlight: str = '
 
 
 def plot_qualifying_lap_evolution(session, fastest_laps = True, save = False): 
+    """Plot the evolution of lap times during qualifying sessions.
 
+    Creates a scatter plot showing how lap times change throughout Q1, Q2, and Q3,
+    with options to show either all laps or just fastest laps.
+
+    Args:
+        session (fastf1.core.Session): The F1 qualifying session to analyze.
+        fastest_laps (bool, optional): Whether to show only fastest laps (True) or all laps (False).
+            Defaults to True.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+
+    Returns:
+        None: Displays or saves the plot.
+    """
     fastf1.plotting.setup_mpl(misc_mpl_mods = True, color_scheme = 'fastf1')
 
     # split quali into the sessions 
@@ -1219,7 +1436,22 @@ def plot_qualifying_lap_evolution(session, fastest_laps = True, save = False):
 
 
 def plot_race_gaps(session, save=False, highlight: str = ''):
+    """Plot the cumulative time gaps between drivers throughout a race.
 
+    Creates a line plot showing how the time gaps between drivers evolve during
+    the race, accounting for safety cars, VSCs, and red flags. Includes optional
+    highlighting of specific drivers.
+
+    Args:
+        session (fastf1.core.Session): The F1 race session to analyze.
+        save (bool, optional): Whether to save the plot to file. Defaults to False.
+            If True, saves to F1DATABOT_PLOT_CACHE directory.
+        highlight (str, optional): Comma-separated list of driver codes to highlight.
+            Defaults to '' (no highlighting).
+
+    Returns:
+        None: Displays or saves the plot.
+    """
     fastf1.plotting.setup_mpl(color_scheme = 'fastf1', misc_mpl_mods = True)
 
     if not highlight == '':
