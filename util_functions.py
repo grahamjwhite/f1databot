@@ -7,12 +7,38 @@ from matplotlib.pyplot import axis
 import f1_website as f1_web
 
 def rotate(xy, *, angle):
+    """Rotate a set of 2D coordinates by a specified angle.
+
+    Args:
+        xy (array-like): Array of shape (n, 2) containing x,y coordinates to rotate.
+        angle (float): Rotation angle in radians.
+
+    Returns:
+        numpy.ndarray: Array of shape (n, 2) containing the rotated coordinates.
+    """
     rot_mat = np.array([[np.cos(angle), np.sin(angle)],
                         [-np.sin(angle), np.cos(angle)]])
     return np.matmul(xy, rot_mat)
 
 
 def fastest_laps_in_session(laps: Laps) -> Laps:
+    """Find the fastest lap for each driver in a session and calculate time deltas.
+
+    Processes lap data to:
+    - Find the fastest lap for each driver
+    - Sort laps by lap time
+    - Calculate percentage difference from fastest lap
+    - Remove any invalid entries
+
+    Args:
+        laps (Laps): FastF1 Laps object containing session lap data.
+
+    Returns:
+        Laps: FastF1 Laps object containing:
+            - Fastest lap for each driver
+            - LapTimeDelta column showing percentage difference from fastest lap
+            - Sorted by lap time
+    """
 
     # get a list of all drivers
     drivers = pd.unique(laps['Driver'])
@@ -36,6 +62,21 @@ def fastest_laps_in_session(laps: Laps) -> Laps:
 
 
 def fastest_sectors_in_session(laps: Laps) -> pd.DataFrame:
+    """Find the fastest sector times for each driver in a session.
+
+    Processes lap data to find the minimum sector time achieved by each driver
+    in each sector of the track.
+
+    Args:
+        laps (Laps): FastF1 Laps object containing session lap data.
+
+    Returns:
+        pd.DataFrame: DataFrame containing:
+            - driver: Driver codes
+            - sector1: Fastest sector 1 time for each driver
+            - sector2: Fastest sector 2 time for each driver
+            - sector3: Fastest sector 3 time for each driver
+    """
 
     # get a list of all drivers
     drivers = pd.unique(laps['Driver'])
@@ -60,24 +101,58 @@ def fastest_sectors_in_session(laps: Laps) -> pd.DataFrame:
 
 
 def safety_car_laps(laps: Laps) -> Laps:
+    """Filter laps to find those run under safety car conditions.
+
+    Args:
+        laps (Laps): FastF1 Laps object containing session lap data.
+
+    Returns:
+        Laps: FastF1 Laps object containing only laps run under safety car conditions.
+    """
     
     sc_laps = laps[laps['TrackStatus'].str.contains('4', regex=False, na=False)]
 
     return sc_laps
 
 def red_flag_laps(laps: Laps) -> Laps:
+    """Filter laps to find those run under red flag conditions.
+
+    Args:
+        laps (Laps): FastF1 Laps object containing session lap data.
+
+    Returns:
+        Laps: FastF1 Laps object containing only laps run under red flag conditions.
+    """
 
     rf_laps = laps[laps['TrackStatus'].str.contains('5', regex=False, na=False)]
 
     return rf_laps
 
 def virtual_safety_car_laps(laps: Laps) -> Laps:
+    """Filter laps to find those run under virtual safety car conditions.
+
+    Args:
+        laps (Laps): FastF1 Laps object containing session lap data.
+
+    Returns:
+        Laps: FastF1 Laps object containing only laps run under virtual safety car conditions.
+    """
 
     vsc_laps = laps[laps['TrackStatus'].str.contains('|'.join('67'), regex=True, na=False)]
 
     return vsc_laps
 
 def clean_laps(laps: Laps) -> Laps:
+    """Filter laps to find those run under normal racing conditions.
+
+    Removes laps run under safety car, virtual safety car, or red flag conditions.
+
+    Args:
+        laps (Laps): FastF1 Laps object containing session lap data.
+
+    Returns:
+        Laps: FastF1 Laps object containing only laps run under normal racing conditions.
+    """
 
     green_laps = laps[~laps['TrackStatus'].str.contains('|'.join('4567'), regex=True, na=False)]
 
@@ -85,6 +160,20 @@ def clean_laps(laps: Laps) -> Laps:
 
 
 def add_special_lap_shading(session: Session, ax: axis) -> None:
+    """Add visual indicators for special race conditions to a plot.
+
+    Adds vertical lines and shaded regions to indicate:
+    - Red flags (red vertical lines)
+    - Safety car periods (orange shading)
+    - Virtual safety car periods (yellow shading)
+
+    Args:
+        session (Session): FastF1 Session object containing race data.
+        ax (axis): Matplotlib axis object to add the shading to.
+
+    Returns:
+        None: Modifies the provided axis object.
+    """
 
     # get the laps of the race leader
     lead_laps = session.laps.loc[session.laps["Position"]==1.0, :]
@@ -119,6 +208,29 @@ def fuel_corrected_times(stint_laps: Laps,
                          time_per_kg: float = 0.03, 
                          reference_lap: int|None = None, 
                          return_value: str = 'timedelta'):
+    """Calculate fuel-corrected lap times for a stint.
+
+    Adjusts lap times to account for fuel burn-off effects, either as:
+    - Time deltas relative to the first lap
+    - Absolute lap times adjusted to a reference lap
+
+    Args:
+        stint_laps (Laps): FastF1 Laps object containing the stint data.
+        laps_in_race (int): Total number of laps in the race.
+        total_fuel (int, optional): Total fuel load in kg. Defaults to 100.
+        time_per_kg (float, optional): Time penalty per kg of fuel per lap in seconds.
+            Defaults to 0.03.
+        reference_lap (int|None, optional): Lap number to adjust times to.
+            If None, uses first lap of stint. Defaults to None.
+        return_value (str, optional): Type of correction to return.
+            Options: 'timedelta' or 'laptime'. Defaults to 'timedelta'.
+
+    Returns:
+        numpy.ndarray: Array of corrected lap times.
+
+    Raises:
+        Exception: If return_value is not 'timedelta' or 'laptime'.
+    """
     
     laptimes = np.array(stint_laps['LapTime'].dt.total_seconds())
     lapnumbers = np.array(stint_laps['LapNumber'])
@@ -146,6 +258,14 @@ def fuel_corrected_times(stint_laps: Laps,
 
 
 def fastest_drivers_in_team(session):
+    """Find the fastest driver from each team in a session.
+
+    Args:
+        session (Session): FastF1 Session object containing session data.
+
+    Returns:
+        list: List of driver codes for the fastest driver from each team.
+    """
     teams = np.unique(session.laps['Team'])
     fastest_drivers = [session.laps.pick_team(team).pick_fastest()['Driver'] for team in teams]
 
@@ -153,6 +273,15 @@ def fastest_drivers_in_team(session):
 
 
 def get_compound_color(compound_name, session):
+    """Get the color code for a tyre compound.
+
+    Args:
+        compound_name (str): Name of the tyre compound.
+        session (Session): FastF1 Session object for context.
+
+    Returns:
+        str: Hex color code for the tyre compound.
+    """
 
     if compound_name == "TEST_UNKNOWN":
         color="#434649"
@@ -164,6 +293,19 @@ def get_compound_color(compound_name, session):
 
 
 def finishing_order(session: Session) -> list:
+    """Determine the finishing order of drivers in a session.
+
+    Handles different session types:
+    - Race/Sprint: Based on final position and lap count
+    - Qualifying: Based on Q1/Q2/Q3 results
+    - Practice: Based on fastest lap times
+
+    Args:
+        session (Session): FastF1 Session object containing session data.
+
+    Returns:
+        list: List of driver codes in finishing order.
+    """
 
     session_name = session.session_info['Name']
 
@@ -190,6 +332,17 @@ def finishing_order(session: Session) -> list:
 
 
 def fix_positions(laps: Laps):
+    """Fix position data for laps where FastF1 generated positions.
+
+    Recalculates correct positions for laps where the original position data
+    was generated by FastF1 rather than from official timing data.
+
+    Args:
+        laps (Laps): FastF1 Laps object containing lap data.
+
+    Returns:
+        Laps: FastF1 Laps object with corrected position data.
+    """
 
     # Where cars stop: set 'Position' to NaN; set 'Time' to NaT 
     laps.loc[laps["FastF1Generated"], "Position"] = np.NaN
@@ -213,6 +366,17 @@ def fix_positions(laps: Laps):
 
 
 async def fix_grid_positions(session: Session) -> Session:
+    """Fix missing grid positions for drivers in a session.
+
+    For drivers without official grid positions, assigns positions based on
+    qualifying results, placing them at the back of the grid.
+
+    Args:
+        session (Session): FastF1 Session object containing session data.
+
+    Returns:
+        Session: FastF1 Session object with corrected grid positions.
+    """
 
     drivers = pd.unique(session.laps['Driver'])
     grid = f1_web.process_starting_grid(f1_web.get_session_results(session, "starting-grid"))
