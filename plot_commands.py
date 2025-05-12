@@ -14,13 +14,42 @@ from fastf1.core import DataNotLoadedError
 
 
 class PlotCommands(commands.Cog):
+    """A Discord cog containing commands for generating Formula 1 data visualizations.
+
+    This cog provides a collection of Discord slash commands that generate various
+    plots and visualizations of Formula 1 data, including track maps, weather data,
+    tyre strategies, and telemetry comparisons.
+
+    Attributes:
+        bot (DiscordBot): The Discord bot instance this cog is attached to.
+    """
 
     def __init__(self, bot: DiscordBot) -> None:
+        """Initialize the PlotCommands cog.
+
+        Args:
+            bot (DiscordBot): The Discord bot instance to attach this cog to.
+        """
         self.bot=bot
 
     async def cog_app_command_error(self, 
                                     interaction: Interaction[discord.Client], 
                                     error: app_commands.AppCommandError) -> None:
+        """Handle errors that occur during command execution.
+
+        Provides user-friendly error messages and logs errors for debugging.
+        Handles specific error types:
+        - DataNotLoadedError: When requested session data is unavailable
+        - ValidationException: When input validation fails
+        - Other errors: Generic error message with logging
+
+        Args:
+            interaction (Interaction[discord.Client]): The interaction that caused the error.
+            error (app_commands.AppCommandError): The error that occurred.
+
+        Returns:
+            None: Sends error messages to the user and logs the error.
+        """
         
         webhook=interaction.followup
         mention = interaction.user.mention
@@ -48,7 +77,19 @@ class PlotCommands(commands.Cog):
     @app_commands.describe(year='The year of the session', 
                         race='Name of the race weekend')
     async def _track_map(self, interaction: discord.Interaction, year: int, race: str):
+        """Generate and send a track map visualization.
 
+        Creates a plot showing the circuit layout with corner markers for the
+        specified Grand Prix. The plot is cached and reused if already generated.
+
+        Args:
+            interaction (discord.Interaction): The Discord interaction that triggered the command.
+            year (int): The year of the Grand Prix.
+            race (str): The name of the race weekend (e.g., 'Monaco', 'Silverstone').
+
+        Returns:
+            None: Sends the track map image to the Discord channel.
+        """
         await interaction.response.defer()
         webhook = interaction.followup
 
@@ -73,7 +114,20 @@ class PlotCommands(commands.Cog):
                         race='Name of the race weekend',
                         sesh='The session (e.g., Q for qualifying or R for race)')
     async def _weather(self, interaction: discord.Interaction, year: int, race: str, sesh: str):
+        """Generate and send a weather visualization for a session.
 
+        Creates a plot showing weather conditions (temperature, humidity, wind speed)
+        throughout the specified session. The plot is cached and reused if already generated.
+
+        Args:
+            interaction (discord.Interaction): The Discord interaction that triggered the command.
+            year (int): The year of the Grand Prix.
+            race (str): The name of the race weekend.
+            sesh (str): The session identifier (e.g., 'Q' for qualifying, 'R' for race).
+
+        Returns:
+            None: Sends the weather plot image to the Discord channel.
+        """
         await interaction.response.defer()
         webhook = interaction.followup
 
@@ -99,7 +153,21 @@ class PlotCommands(commands.Cog):
                         race='Name of the race weekend',
                         sesh='The session (e.g., Q for qualifying or R for race)')
     async def _tyre_strategy(self, interaction: discord.Interaction, year: int, race: str, sesh: str):
+        """Generate and send a tyre strategy visualization.
 
+        Creates a plot showing the tyre compounds used by each driver throughout
+        the session, including stint lengths and compound types. The plot is cached
+        and reused if already generated.
+
+        Args:
+            interaction (discord.Interaction): The Discord interaction that triggered the command.
+            year (int): The year of the Grand Prix.
+            race (str): The name of the race weekend.
+            sesh (str): The session identifier (e.g., 'Q' for qualifying, 'R' for race).
+
+        Returns:
+            None: Sends the tyre strategy plot image to the Discord channel.
+        """
         await interaction.response.defer()
         webhook = interaction.followup
 
@@ -125,7 +193,20 @@ class PlotCommands(commands.Cog):
                         race='Name of the race weekend',
                         sesh='The session (e.g., Q for qualifying or R for race)')
     async def _fastest_laps(self, interaction: discord.Interaction, year: int, race: str, sesh: str):
+        """Generate and send a fastest laps visualization.
 
+        Creates a plot comparing the fastest lap times of all drivers in the session,
+        showing their relative performance. The plot is cached and reused if already generated.
+
+        Args:
+            interaction (discord.Interaction): The Discord interaction that triggered the command.
+            year (int): The year of the Grand Prix.
+            race (str): The name of the race weekend.
+            sesh (str): The session identifier (e.g., 'Q' for qualifying, 'R' for race).
+
+        Returns:
+            None: Sends the fastest laps plot image to the Discord channel.
+        """
         await interaction.response.defer()
         webhook = interaction.followup
 
@@ -151,7 +232,23 @@ class PlotCommands(commands.Cog):
                         race='Name of the race weekend',
                         sesh='The session. Can only be Q or SQ')
     async def _qualifying_fastest_laps(self, interaction: discord.Interaction, year: int, race: str, sesh: str):
+        """Generate and send a qualifying fastest laps visualization.
 
+        Creates a plot comparing the fastest lap times of all drivers across Q1, Q2, and Q3
+        qualifying sessions. Only works for qualifying sessions (Q or SQ).
+
+        Args:
+            interaction (discord.Interaction): The Discord interaction that triggered the command.
+            year (int): The year of the Grand Prix.
+            race (str): The name of the race weekend.
+            sesh (str): The session identifier (must be 'Q' or 'SQ').
+
+        Returns:
+            None: Sends the qualifying fastest laps plot image to the Discord channel.
+
+        Raises:
+            ValidationException: If the session is not a qualifying session.
+        """
         await interaction.response.defer()
         webhook = interaction.followup
 
@@ -180,7 +277,20 @@ class PlotCommands(commands.Cog):
                         race='Name of the race weekend',
                         sesh='The session (e.g., Q for qualifying or R for race)')
     async def _speed_versus_laptime(self, interaction: discord.Interaction, year: int, race: str, sesh: str):
+        """Generate and send a speed vs laptime correlation plot.
 
+        Creates a scatter plot comparing each driver's top speed against their fastest
+        lap time, showing the relationship between straight-line speed and overall pace.
+
+        Args:
+            interaction (discord.Interaction): The Discord interaction that triggered the command.
+            year (int): The year of the Grand Prix.
+            race (str): The name of the race weekend.
+            sesh (str): The session identifier (e.g., 'Q' for qualifying, 'R' for race).
+
+        Returns:
+            None: Sends the speed vs laptime plot image to the Discord channel.
+        """
         await interaction.response.defer()
         webhook = interaction.followup
 
@@ -209,7 +319,27 @@ class PlotCommands(commands.Cog):
                         driver2='The second driver to compare',
                         lap='Optionally provide the lap number')
     async def _compare_telemetry(self, interaction: discord.Interaction, year: int, race: str, sesh: str, driver1: str, driver2: str, lap:(int|None)=None):
+        """Generate and send a telemetry comparison visualization.
 
+        Creates a detailed telemetry comparison between two drivers, showing:
+        - Speed traces
+        - Throttle application
+        - Brake application
+        - DRS usage
+        - Lap time delta
+
+        Args:
+            interaction (discord.Interaction): The Discord interaction that triggered the command.
+            year (int): The year of the Grand Prix.
+            race (str): The name of the race weekend.
+            sesh (str): The session identifier (e.g., 'Q' for qualifying, 'R' for race).
+            driver1 (str): The three-letter code for the first driver (e.g., 'VER').
+            driver2 (str): The three-letter code for the second driver (e.g., 'HAM').
+            lap (int|None, optional): Specific lap number to compare. If None, uses fastest laps.
+
+        Returns:
+            None: Sends the telemetry comparison plot image to the Discord channel.
+        """
         await interaction.response.defer()
         webhook = interaction.followup
 
