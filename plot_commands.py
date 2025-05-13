@@ -1,3 +1,32 @@
+"""Discord bot commands for Formula 1 data visualization.
+
+This module provides a collection of Discord slash commands that generate various
+visualizations of Formula 1 data. It handles user interactions, data loading,
+and plot generation for different types of F1 analysis.
+
+The module includes commands for:
+- Track maps and circuit layouts
+- Weather data visualization
+- Tyre strategy analysis
+- Lap time comparisons
+- Telemetry analysis
+- Position changes and race gaps
+- Qualifying session analysis
+- Corner-by-corner analysis
+
+Each command follows a similar pattern:
+1. Validates user input
+2. Loads required session data
+3. Generates or retrieves cached plots
+4. Sends the visualization to the Discord channel
+
+Dependencies:
+    - discord.py: For Discord bot functionality
+    - fastf1: For Formula 1 data access
+    - plot_functions: For visualization generation
+    - data: For session data loading
+"""
+
 from __future__ import annotations
 
 import discord

@@ -1,3 +1,29 @@
+"""Utility functions for processing and analyzing Formula 1 data.
+
+This module provides a collection of helper functions used throughout the application
+for various data manipulation, analysis, and plotting support tasks related to
+Formula 1 data obtained from FastF1 and other sources.
+
+Key functionalities include:
+- Geometric transformations (coordinate rotation)
+- Lap and sector time analysis (finding fastest laps/sectors, ideal laps)
+- Filtering laps based on track status (SC, VSC, Red Flags)
+- Data enrichment (fuel correction, position fixing, grid position fixing)
+- Plotting assistance (special condition shading, tyre colors)
+- Determining session outcomes (finishing order)
+
+These functions support the main data loading, plotting, and command handling
+modules by providing reusable data processing logic.
+
+Dependencies:
+    - numpy: For numerical operations and array manipulation.
+    - pandas: For data structures and manipulation (DataFrames, Series).
+    - fastf1: For core F1 data types (Laps, Session) and plotting utilities.
+    - matplotlib: For plotting elements (axis manipulation).
+    - f1_website: For accessing starting grid data.
+    - data: For accessing session data when fixing grid positions.
+"""
+
 import numpy as np
 import pandas as pd
 import fastf1.plotting as ff1plt

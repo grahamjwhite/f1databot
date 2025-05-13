@@ -1,3 +1,26 @@
+"""Functions for retrieving and processing data from the official Formula 1 website.
+
+This module provides tools to scrape and process various data types from the
+official F1 results archive. It handles:
+
+- Fetching raw data tables using requests and pandas
+- Cleaning and formatting the retrieved data
+- Processing specific data types like pit stops, starting grids, and results
+
+The primary function `get_session_results` retrieves data based on session
+information and the desired data type. Subsequent processing functions clean
+and standardize the data for further analysis.
+
+Note:
+    Web scraping can be fragile and may break if the F1 website structure changes.
+
+Dependencies:
+    - requests: For making HTTP requests
+    - pandas: For reading HTML tables and data manipulation
+    - io: For handling string IO with pandas
+    - fastf1: For Session object information
+"""
+
 import requests
 import pandas as pd
 import io

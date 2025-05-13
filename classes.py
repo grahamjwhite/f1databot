@@ -1,3 +1,23 @@
+"""Core classes for the Formula 1 data analysis Discord bot.
+
+This module provides the fundamental classes that form the backbone of the bot's
+functionality. It includes the base bot class and custom exception handling.
+
+The module provides:
+- DiscordBot: Base bot class with Formula 1 specific configuration
+- ValidationException: Custom exception for input validation errors
+
+These classes are used throughout the application to:
+- Handle Discord interactions and commands
+- Manage bot configuration and intents
+- Provide consistent error handling
+- Enable logging and monitoring
+
+Dependencies:
+    - discord.py: For Discord bot functionality
+    - logging: For operation and error tracking
+"""
+
 import discord
 import logging
 from discord.ext import commands

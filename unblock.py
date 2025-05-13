@@ -1,3 +1,21 @@
+"""Utilities for running synchronous code asynchronously.
+
+This module provides tools for running CPU-intensive or I/O-bound synchronous
+code in separate threads to prevent blocking the main event loop. It's particularly
+useful for data processing and visualization tasks that might otherwise block
+the Discord bot's responsiveness.
+
+The module provides:
+- to_thread decorator: Converts synchronous functions to run in separate threads
+- Thread management for async operations
+- Integration with asyncio event loop
+
+Dependencies:
+    - asyncio: For async/await support
+    - functools: For function wrapping
+    - typing: For type hints
+"""
+
 import functools
 import typing
 import asyncio

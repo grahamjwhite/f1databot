@@ -1,3 +1,28 @@
+"""Data loading functions for Formula 1 sessions using FastF1.
+
+This module provides asynchronous functions to fetch and load Formula 1 session
+data using the FastF1 library. It handles data caching and allows loading
+of various data types (laps, telemetry, weather, messages).
+
+The module provides functions for:
+- Loading single sessions
+- Loading multiple sessions in parallel
+- Loading and combining lap data from multiple sessions
+- Loading testing sessions
+
+Functions use the `@to_thread` decorator to run FastF1's synchronous loading
+functions in separate threads, preventing blocking of the main application.
+
+Cache configuration is handled via the F1DATABOT_DATA_CACHE constant.
+
+Dependencies:
+    - fastf1: For accessing Formula 1 data
+    - pandas: For data manipulation (used in get_multiple_session_laps)
+    - numpy: Required by FastF1/Pandas
+    - constants: For cache path configuration
+    - unblock: For the @to_thread decorator
+"""
+
 import fastf1 as ff1
 import numpy as np
 import pandas as pd

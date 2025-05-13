@@ -1,3 +1,23 @@
+"""Main entry point for the Formula 1 data analysis Discord bot.
+
+This module initializes and runs the Discord bot that provides Formula 1 data
+analysis and visualization capabilities. It handles bot setup, command loading,
+error handling, and logging.
+
+The module:
+- Sets up logging configuration
+- Initializes the bot with required intents
+- Loads command cogs
+- Handles bot events (ready, errors)
+- Manages command synchronization
+
+Dependencies:
+    - discord.py: For Discord bot functionality
+    - logging: For error and operation logging
+    - plot_commands: For visualization commands
+    - classes: For bot class definitions
+"""
+
 import logging
 from logging import DEBUG as LOG_DEBUG
 from logging import ERROR as LOG_ERROR

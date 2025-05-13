@@ -1,5 +1,44 @@
-import fastf1
-import fastf1.plotting
+"""Functions for generating various Formula 1 data visualizations.
+
+This module provides a collection of functions designed to create informative
+and visually appealing plots based on Formula 1 session data obtained using
+the FastF1 library.
+
+It includes functions for plotting:
+- Track layouts and corner information
+- Weather conditions during a session
+- Tyre strategies and stint analysis
+- Lap time comparisons (fastest laps, ideal vs. actual)
+- Telemetry data comparisons between drivers
+- Corner-specific telemetry analysis
+- Sector time performance
+- Gear shifts on track
+- Speed vs. lap time correlations
+- Driver actions (throttle/brake) on track
+- Position changes during a race/sprint
+- Qualifying lap time evolution
+- Race gaps between drivers
+
+Helper functions are also included for tasks like:
+- Standardizing plot parameters
+- Applying custom driver styles
+- Adding shading for special conditions (SC, VSC, Red Flags)
+
+Each plotting function typically takes a FastF1 Session object as input,
+processes the relevant data, and generates a matplotlib plot, optionally
+saving it to a file.
+
+Dependencies:
+    - matplotlib: For creating plots
+    - fastf1: For accessing F1 data and plotting utilities
+    - numpy: For numerical operations
+    - pandas: For data manipulation
+    - scipy: For filtering/smoothing operations
+    - util_functions: For helper data processing functions
+"""
+
+import fastf1 as ff1
+import fastf1.plotting as ff1plt
 import fastf1.core
 import numpy as np
 import pandas as pd
