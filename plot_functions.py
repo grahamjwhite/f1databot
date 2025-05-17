@@ -1,5 +1,44 @@
-import fastf1
-import fastf1.plotting
+"""Functions for generating various Formula 1 data visualizations.
+
+This module provides a collection of functions designed to create informative
+and visually appealing plots based on Formula 1 session data obtained using
+the FastF1 library.
+
+It includes functions for plotting:
+- Track layouts and corner information
+- Weather conditions during a session
+- Tyre strategies and stint analysis
+- Lap time comparisons (fastest laps, ideal vs. actual)
+- Telemetry data comparisons between drivers
+- Corner-specific telemetry analysis
+- Sector time performance
+- Gear shifts on track
+- Speed vs. lap time correlations
+- Driver actions (throttle/brake) on track
+- Position changes during a race/sprint
+- Qualifying lap time evolution
+- Race gaps between drivers
+
+Helper functions are also included for tasks like:
+- Standardizing plot parameters
+- Applying custom driver styles
+- Adding shading for special conditions (SC, VSC, Red Flags)
+
+Each plotting function typically takes a FastF1 Session object as input,
+processes the relevant data, and generates a matplotlib plot, optionally
+saving it to a file.
+
+Dependencies:
+    - matplotlib: For creating plots
+    - fastf1: For accessing F1 data and plotting utilities
+    - numpy: For numerical operations
+    - pandas: For data manipulation
+    - statsmodels: For OLS regression in race_gaps
+    - util_functions: For helper data processing functions
+"""
+
+import fastf1 as ff1 # Renamed for consistency
+import fastf1.plotting as ff1plot # Renamed for consistency
 import fastf1.core
 import numpy as np
 import pandas as pd
@@ -7,24 +46,39 @@ import util_functions as uf
 import f1_website as f1web
 import timple.timedelta as tmpldelta
 import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import statsmodels.api as sm
+import statsmodels.api as sm # Used in plot_race_gaps
+import functools # Added for @to_thread
+import asyncio # Added for @to_thread
 
-from fastf1.core import Laps
-from timple.timedelta import strftimedelta
-from timple.timedelta import TimedeltaFormatter
+from fastf1.core import Laps, Session
+from fastf1.core import CircuitInfo # Explicit import
+from fastf1.plotting import get_driver_style # Explicit import
+from timple.timedelta import strftimedelta, TimedeltaFormatter
+from matplotlib.figure import Figure # Explicit import
 from matplotlib.gridspec import GridSpec
 from matplotlib.collections import LineCollection
-from matplotlib.colors import ListedColormap
-from classes import ValidationException
-from patsy import dmatrices
+from matplotlib.colors import ListedColormap, Colormap # Explicit import
+from matplotlib.axes import Axes
+from classes import ValidationException # Not directly used, but good to keep if indirectly used
+from patsy import dmatrices # Used in plot_race_gaps
 from constants import F1DATABOT_PLOT_CACHE
+from typing import Dict, List, Tuple, Union, Any, Optional # Added Optional
+from unblock import to_thread # Added for @to_thread
 
+def get_custom_driver_styles(chart_type: str = 'line') -> List[Dict[str, Any]]: 
+    """Get predefined style configurations for different chart types.
 
-def get_custom_driver_styles(chart_type: str = 'line') -> dict: 
+    Args:
+        chart_type (str, optional): Type of chart to get styles for. Options are 'line', 'line_marker', 'bar', 'scatter'.
+            Defaults to 'line'.
 
-    style_dict = {
+    Returns:
+        List[Dict[str, Any]]: List of dictionaries containing style configurations.
+    """
+    style_dict: Dict[str, List[Dict[str, Any]]] = {
         'line': [
             {'linestyle': 'solid', 'color': 'auto'},
             {'linestyle': '--', 'color': 'auto'},
@@ -46,63 +100,112 @@ def get_custom_driver_styles(chart_type: str = 'line') -> dict:
             {'color': 'auto', 'marker': 'D'}
         ]
     }
-
-    return style_dict[chart_type]
-
-
-def check_plot_params(params: dict) -> dict:
-
-    for param in params.keys():
-        if param == 'driver1' or param == 'driver2':
-            params[param] = params[param].upper()
-
-    return(params)
+    # Handle potential KeyError
+    return style_dict.get(chart_type, [])
 
 
-def plot_weather(session: fastf1.core.Session, save: bool=False) -> None:
+def check_plot_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and standardize plot parameters.
 
-    fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
+    Args:
+        params (Dict[str, Any]): Dictionary containing plot parameters to be checked.
 
-    weather = session.weather_data
-    track_degrees = weather['TrackTemp'].to_numpy()
-    ambient_degrees = weather['AirTemp'].to_numpy()
-    rain = session.weather_data["Rainfall"].to_numpy()
+    Returns:
+        Dict[str, Any]: Dictionary with standardized parameters. Driver codes are converted to uppercase.
+    """
+    updated_params: Dict[str, Any] = params.copy()
+    for param_key, param_value in updated_params.items():
+        if param_key in ['driver1', 'driver2'] and isinstance(param_value, str):
+            updated_params[param_key] = param_value.upper()
+    return updated_params
 
-    time = weather['Time'].dt.total_seconds()/60
+
+@to_thread
+def plot_weather(session: Session) -> Optional[str]:
+    """Plot weather data for a Formula 1 session.
+
+    Creates a two-panel plot showing track temperature, air temperature, and rainfall
+    throughout the session. The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (Session): The F1 session to plot weather data for.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot, or None if data is incomplete.
+    """
+    ff1plot.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
+
+    weather: pd.DataFrame = session.weather_data
+    if weather.empty or not all(col in weather.columns for col in ['TrackTemp', 'AirTemp', 'Rainfall', 'Time']):
+        print(f"Weather data incomplete or missing for {session.event.description}")
+        return None # Return None if data is missing
+        
+    track_degrees: np.ndarray = weather['TrackTemp'].to_numpy()
+    ambient_degrees: np.ndarray = weather['AirTemp'].to_numpy()
+    rain: np.ndarray = weather["Rainfall"].to_numpy()
+
+    time_in_seconds: pd.Series = weather['Time'].dt.total_seconds()
+    time_in_minutes: np.ndarray = (time_in_seconds / 60).to_numpy()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, height_ratios=[4,1], figsize=(10,7), sharex=True, gridspec_kw={'hspace': 0.05})
-    ax1.plot(time, track_degrees, color = 'dodgerblue', label = 'Track temperature')
-    ax1.plot(time, ambient_degrees, color = 'gold', label = 'Air temperature')
-    ax1.set_ylabel('Temperature (degrees celcius)')
+    
+    ax1.plot(time_in_minutes, track_degrees, color='dodgerblue', label='Track temperature')
+    ax1.plot(time_in_minutes, ambient_degrees, color='gold', label='Air temperature')
+    ax1.set_ylabel('Temperature (degrees Celsius)') # Corrected spelling
     ax1.legend()
 
-    ax2.plot(time, rain, color='blue')
+    ax2.plot(time_in_minutes, rain, color='blue')
     ax2.set_xlabel('Session time (minutes)')
-    ax2.set(yticklabels=[])   
+    ax2.set_yticklabels([]) # Clear existing labels first
+    ax2.set_yticks([0, 1]) # Set ticks
+    ax2.set_yticklabels(["No", "Yes"]) # Set labels for those ticks
     ax2.set_ylabel("Rain")
-    ax2.tick_params(left=False)
-    ax2.set_yticks((0,1), ["No", "Yes"])
+    ax2.tick_params(axis='y', length=0) # Use axis='y' and length=0 instead of left=False
 
     plt.suptitle("Session Weather \n"
                  f"{session.event['EventName']} {session.event.year} {session.session_info['Name']}",
                  fontsize='xx-large')
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/weather {session.event['EventName']} {session.event.year} {session.session_info['Name']}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_weather.__name__,
+        session=session
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}", 
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return the filename stem
 
 
-def plot_track_layout(session: fastf1.core.Session, save:bool = False) -> None:
+@to_thread
+def plot_track_layout(session: fastf1.core.Session) -> Optional[str]:
+    """Plot the track layout with corner markers for a Formula 1 circuit.
+
+    Creates a visualization of the track layout with numbered corners and their
+    positions marked. The track is rotated according to the circuit's orientation.
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing track data.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot, or None if data is incomplete.
+    """
 
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
 
     lap = session.laps.pick_fastest()
+    if lap is None or pd.isnull(lap['LapTime']):
+        print(f"No valid fastest lap data to plot track layout for {session.event.description}")
+        return None # Return None if no lap data
     pos = lap.get_pos_data()
+    if pos.empty:
+        print(f"No position data available for fastest lap in {session.event.description}")
+        return None # Return None if no position data
 
     circuit_info = session.get_circuit_info()
+    if circuit_info is None:
+        print(f"No circuit info available for {session.event.description}")
+        return None # Return None if no circuit info
 
     # Get an array of shape [n, 2] where n is the number of points and the second
     # axis is x and y.
@@ -151,15 +254,30 @@ def plot_track_layout(session: fastf1.core.Session, save:bool = False) -> None:
     plt.title(session.event['Location'])
     plt.axis('off')
     
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/track_map_{session.event['EventName']}_{session.event.year}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_track_layout.__name__,
+        session=session
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}", 
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return the filename stem
 
 
-def plot_fastest_laps(session: fastf1.core.Session, save:bool = False) -> None:
+@to_thread
+def plot_fastest_laps(session: fastf1.core.Session) -> Optional[str]:
+    """Plot the fastest lap times for all drivers in a session.
+
+    Creates a horizontal bar chart showing each driver's fastest lap time relative
+    to the session's fastest lap. Includes lap time deltas and absolute times.
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
 
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
 
@@ -200,15 +318,30 @@ def plot_fastest_laps(session: fastf1.core.Session, save:bool = False) -> None:
                  f"{session.event['EventName']} {session.event.year} {session.session_info['Name']}", 
                  fontsize = 'xx-large')
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/fastest_laps {session.event['EventName']} {session.event.year} {session.session_info['Name']}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_fastest_laps.__name__,
+        session=session
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}", 
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
 
 
-def plot_qualifying_fastest_laps(session: fastf1.core.Session, save:bool = False) -> None:
+@to_thread
+def plot_qualifying_fastest_laps(session: fastf1.core.Session) -> Optional[str]:
+    """Plot the fastest lap times for all drivers across Q1, Q2, and Q3 qualifying sessions.
+
+    Creates a three-panel plot showing each driver's fastest lap time in each qualifying
+    session, with times relative to the fastest lap in each session.
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 qualifying session to analyze.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
 
     q1, q2, q3 = session.laps.pick_quicklaps(threshold=1.15).split_qualifying_sessions()
     q1 = uf.fastest_laps_in_session(q1)
@@ -259,16 +392,31 @@ def plot_qualifying_fastest_laps(session: fastf1.core.Session, save:bool = False
                  f"{session.event['EventName']} {session.event.year} {session.session_info['Name']}",
                  fontsize='xx-large')
     
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/qualifying_fastest_laps {session.event['EventName']} {session.event.year} {session.session_info['Name']}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_qualifying_fastest_laps.__name__,
+        session=session
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}", 
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
 
     
 
-def plot_tyre_strategies(session: fastf1.core.Session, save:bool = False) -> None:
+@to_thread
+def plot_tyre_strategies(session: fastf1.core.Session) -> Optional[str]:
+    """Plot the tyre strategies used by all drivers during a session.
+
+    Creates a visualization showing each driver's tyre compounds and stint lengths
+    throughout the session. For race sessions, shows lap numbers; for other sessions,
+    shows session time. The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
 
     fastf1.plotting.setup_mpl(misc_mpl_mods = False, color_scheme = 'fastf1')
 
@@ -385,17 +533,38 @@ def plot_tyre_strategies(session: fastf1.core.Session, save:bool = False) -> Non
     ax.spines['right'].set_visible(False)
     ax.spines['left'].set_visible(False)
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/tyre_strategy_{session.event['EventName']}_{session.event.year}_{session.session_info['Name']}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    # rotate driver name labels
+    ax.set_yticklabels(drivers_ordered, rotation=0)
+
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_tyre_strategies.__name__,
+        session=session
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}", 
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
 
 
+@to_thread
 def plot_telemetry_comparison(session: fastf1.core.Session, driver1: str, driver2: str, 
-                              lap:(int|None) = None, save:bool = False) -> None:
+                              lap:(int|None) = None) -> Optional[str]:
+    """Compare telemetry data between two drivers for a specific lap.
 
+    Creates a six-panel plot comparing speed, delta time, throttle, brake, DRS usage,
+    and gear selection between two drivers. Includes corner markers and lap times.
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing the lap data.
+        driver1 (str): Three-letter driver code for the first driver.
+        driver2 (str): Three-letter driver code for the second driver.
+        lap (int|None, optional): Specific lap number to compare. If None, uses fastest lap.
+            Defaults to None.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
 
     # get circuit info for the corner markers
@@ -511,16 +680,47 @@ def plot_telemetry_comparison(session: fastf1.core.Session, driver1: str, driver
         ax1.text(corner['Distance'], ymax, txt,
                 va='bottom', ha='center', size='small')
         
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/compare_telemetry {session.event['EventName']} {session.event.year} {session.session_info['Name']} {driver1} {driver2} {lap_text}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    driver_codes_arg = []
+    if driver1: driver_codes_arg.append(driver1)
+    if driver2: driver_codes_arg.append(driver2)
+    driver_codes_arg = driver_codes_arg if driver_codes_arg else None
+    lap_numbers_arg = [lap] if lap is not None else None
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_telemetry_comparison.__name__,
+        session=session,
+        driver_codes=driver_codes_arg,
+        lap_numbers=lap_numbers_arg
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}",
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
 
 
+@to_thread
 def plot_corner_analysis(session: fastf1.core.Session, driver1: str, driver2: str, corner:int, lower_offset:int = 200,
-                         upper_offset:int = 200, lap_number:(int|None) = None, save: bool = False) -> None:
+                         upper_offset:int = 200, lap_number:(int|None) = None) -> Optional[str]:
+    """Analyze and compare how two drivers approach a specific corner.
+
+    Creates a detailed visualization of speed, driver actions, and time delta around
+    a specific corner, showing how each driver approaches and exits the corner.
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing the lap data.
+        driver1 (str): Three-letter driver code for the first driver.
+        driver2 (str): Three-letter driver code for the second driver.
+        corner (int): Corner number to analyze.
+        lower_offset (int, optional): Distance in meters before the corner to include.
+            Defaults to 200.
+        upper_offset (int, optional): Distance in meters after the corner to include.
+            Defaults to 200.
+        lap_number (int|None, optional): Specific lap number to analyze. If None, uses fastest lap.
+            Defaults to None.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
     
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme = 'fastf1')
 
@@ -669,16 +869,37 @@ def plot_corner_analysis(session: fastf1.core.Session, driver1: str, driver2: st
                 f"{driver1} versus {driver2} - {delta_text}",
                 fontsize = 'xx-large')
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/Corner analysis {session.event['EventName']} {session.event.year} {session.session_info['Name']} {driver1} {driver2} {lap_text} Corner {corner}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    driver_codes_arg = []
+    if driver1: driver_codes_arg.append(driver1)
+    if driver2: driver_codes_arg.append(driver2)
+    driver_codes_arg = driver_codes_arg if driver_codes_arg else None
+    lap_numbers_arg = [lap_number] if lap_number is not None else None
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_corner_analysis.__name__,
+        session=session,
+        driver_codes=driver_codes_arg,
+        lap_numbers=lap_numbers_arg
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}",
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
 
 
-def plot_gears_on_track(session: fastf1.core.Session, save: bool = False) -> None:
+@to_thread
+def plot_gears_on_track(session: fastf1.core.Session) -> Optional[str]:
+    """Visualize gear selection along the track layout.
 
+    Creates a color-coded visualization of the track showing which gear is used
+    at each point, using the fastest lap of the session.
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing the lap data.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
     lap = session.laps.pick_fastest()
     tel = lap.get_car_data()
     pos = lap.get_pos_data()
@@ -710,16 +931,32 @@ def plot_gears_on_track(session: fastf1.core.Session, save: bool = False) -> Non
     cbar.set_ticks(np.arange(1.5, 9.5))
     cbar.set_ticklabels(np.arange(1, 9))
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/Gears on track {session.event['EventName']} {session.event.year}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_gears_on_track.__name__,
+        session=session
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}", 
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
 
 
-def plot_speed_versus_laptime(session: fastf1.core.Session, trap_loc:(str|None), save: bool = False) -> None:
+@to_thread
+def plot_speed_versus_laptime(session: fastf1.core.Session, trap_loc:(str|None)) -> Optional[str]:
+    """Plot the relationship between speed and lap time for all drivers.
 
+    Creates a scatter plot comparing each driver's fastest lap time against their
+    speed at a specific location (finish line, speed trap, or maximum speed).
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+        trap_loc (str|None): Location to measure speed from. Options are:
+            'FL' for finish line, 'ST' for speed trap, or None for maximum speed.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot, or None if an error occurs.
+    """
     fastf1.plotting.setup_mpl(mpl_timedelta_support=True, misc_mpl_mods=True, color_scheme='fastf1')
 
     laps = session.laps.pick_quicklaps(threshold=1.15)
@@ -784,17 +1021,36 @@ def plot_speed_versus_laptime(session: fastf1.core.Session, trap_loc:(str|None),
     for index, lap in fastest_laps.iterlaps():
         ax.text(speed[index]+0.2, lap['LapTime'], lap['Driver'])
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/speed_versus_laptime {session.event['EventName']} {session.event.year} {session.session_info['Name']}.png", 
-                    format='png', bbox_inches = 'tight')
-        plt.clf()
-    else:
-        plt.show()
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_speed_versus_laptime.__name__,
+        session=session
+        # trap_loc is not part of generate_plot_filename
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}",
+                format='png', bbox_inches = 'tight')
+    plt.clf()
+    # Removed else block, always save and return filename stem
+    return filename
 
 
+@to_thread
 def plot_actions_on_track(session: fastf1.core.Session, driver: str,  
-                          lap_number=None, save: bool = False) -> None:
+                          lap_number=None) -> Optional[str]:
+    """Visualize driver actions (throttle/brake) along the track layout.
 
+    Creates a color-coded visualization of the track showing when the driver is
+    braking, using full throttle, or using partial throttle.
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session containing the lap data.
+        driver (str): Three-letter driver code for the driver to analyze.
+        lap_number (int|None, optional): Specific lap number to analyze. If None, uses fastest lap.
+            Defaults to None.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
     fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme = 'fastf1')
 
     # Get the laps and circuit info
@@ -890,16 +1146,34 @@ def plot_actions_on_track(session: fastf1.core.Session, driver: str,
     else:
         lap_text = f"Lap {lap_number}"
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/Actions on track {session.event['EventName']} {session.event.year} {session.session_info['Name']} {driver} {lap_text}.png", 
-                    format='png', bbox_inches = 'tight')
-        plt.clf()
-    else:
-        plt.show()
+    driver_codes_arg = [driver] if driver else None
+    lap_numbers_arg = [lap_number] if lap_number is not None else None
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_actions_on_track.__name__,
+        session=session,
+        driver_codes=driver_codes_arg,
+        lap_numbers=lap_numbers_arg
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}",
+                format='png', bbox_inches = 'tight')
+    plt.clf()
+    return filename
 
 
-def plot_sector_performance(session: fastf1.core.Session, save:bool = False) -> None:
+@to_thread
+def plot_sector_performance(session: fastf1.core.Session) -> Optional[str]:
+    """Plot sector times for all drivers in a session.
 
+    Creates a three-panel plot showing each driver's sector times relative to
+    the fastest time in each sector.
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
     laps = session.laps.pick_quicklaps(threshold=1.15)
 
     fastest_laps = uf.fastest_laps_in_session(laps)[['LapTime', 'Driver']]
@@ -991,16 +1265,31 @@ def plot_sector_performance(session: fastf1.core.Session, save:bool = False) -> 
                  f"{session.event['EventName']} {session.event.year} {session.session_info['Name']} \n",
                 fontsize='xx-large', y=1.03)
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/sector_performance {session.event['EventName']} {session.event.year} {session.session_info['Name']}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_sector_performance.__name__,
+        session=session
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}", 
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
 
 
-def plot_actual_vs_ideal_laptimes(session: fastf1.core.Session, save: bool = False) -> None:    
+@to_thread
+def plot_actual_vs_ideal_laptimes(session: fastf1.core.Session) -> Optional[str]:    
+    """Compare actual fastest lap times with ideal lap times for all drivers.
 
+    Creates a two-panel plot showing:
+    1. Actual lap time gaps to the fastest driver
+    2. Ideal lap time gaps (sum of best sectors) and the difference to actual times
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
     fastf1.plotting.setup_mpl(misc_mpl_mods = False, color_scheme = 'fastf1')
 
     laps = session.laps.pick_quicklaps(threshold=1.15)
@@ -1079,82 +1368,152 @@ def plot_actual_vs_ideal_laptimes(session: fastf1.core.Session, save: bool = Fal
                 f"{session.event['EventName']} {session.event.year} {session.session_info['Name']}",
                 fontsize = 'xx-large')
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/ideal_laptimes {session.event['EventName']} {session.event.year} {session.session_info['Name']}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_actual_vs_ideal_laptimes.__name__,
+        session=session
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}", 
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
 
 
-async def plot_position_changes(session: fastf1.core.Session, highlight: str = '', save: bool = False) -> None:
+async def plot_position_changes(session: fastf1.core.Session, highlight: str = '') -> Optional[str]:
+    """Plot the position changes of all drivers throughout a session.
 
-    fastf1.plotting.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
+    Creates a line plot showing how each driver's position changes over the course
+    of the session, with optional highlighting of specific drivers. Starting positions
+    from the grid are included as Lap 0. The plot is saved to the F1DATABOT_PLOT_CACHE directory.
 
-    laps = uf.fix_positions(session.laps)
+    Args:
+        session (fastf1.core.Session): The F1 session to analyze.
+        highlight (str, optional): Comma-separated list of driver codes to highlight.
+            Defaults to '' (no highlighting).
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot, or None if an error occurs.
+    """
+    ff1plot.setup_mpl(misc_mpl_mods=False, color_scheme='fastf1')
+
+    laps = uf.fix_positions(session.laps) 
+    if laps.empty:
+        print(f"plot_position_changes: No lap data after uf.fix_positions for {session.event.description}")
+        return None
+        
     drivers = np.unique(laps['Driver'])
+    if len(drivers) == 0:
+        print(f"plot_position_changes: No drivers found in lap data for {session.event.description}")
+        return None
 
-    # set up the plot
+    # set up the plot parameters based on session type
     session_name = session.session_info['Name']
     if session_name == "Race":
-        text_pos = -4
-        axis_start = -5
+        text_pos_x = -4
+        axis_start_x = -5
         webpage_name = "starting-grid"
-    else:
-        text_pos = -2
-        axis_start = -3
+    else: # Defaulting for Sprint or other session types
+        text_pos_x = -2
+        axis_start_x = -3
         webpage_name = "sprint-grid"
 
     fig, ax = plt.subplots(figsize=(10, 7))
-    ax.set_ylim([len(drivers)+0.5, 0.5])
+    
+    # Attempt to fetch grid positions
+    try:
+        grid_positions_df = f1web.process_starting_grid(f1web.get_session_results(session, webpage_name))
+        if grid_positions_df.empty:
+            print(f"plot_position_changes: Fetched empty grid positions for {session.event.description}. Plotting without Lap 0 data.")
+            grid_positions_df = None # Ensure it's None if empty
+    except Exception as e:
+        print(f"plot_position_changes: Error fetching grid positions for {session.event.description}: {e}. Plotting without Lap 0 data.")
+        grid_positions_df = None
+
+    # Configure axes
+    ax.set_ylim([len(drivers) + 0.5, 0.5])
     ax.set_yticks([1, 5, 10, 15, 20])
-    ax.set_xlim([axis_start, np.max(laps['LapNumber'])+2])
+    max_lap_num = laps['LapNumber'].max() if not laps['LapNumber'].empty else 0
+    ax.set_xlim([axis_start_x, max_lap_num + 2])
     ax.set_xlabel('Lap')
     ax.set_ylabel('Position')
 
-    grid_positions = f1web.process_starting_grid(f1web.get_session_results(session, webpage_name))
+    highlight_list = [h.strip().upper() for h in highlight.split(',') if h.strip()] if highlight else []
 
-    if not highlight == '':
-        highlight = highlight.split(",")
-
-    # plot the positions for each driver
     for driver in drivers:
         driver_laps = laps.pick_drivers(driver).reset_index()
 
-        if len(driver_laps) == 0:
-            continue
+        if driver_laps.empty and grid_positions_df is None:
+            continue # Skip if no laps and no grid info for this driver
 
-        grid_pos = int(grid_positions.loc[grid_positions.Abbreviation == driver, "Pos"].iat[0])
+        current_pos_series_list = []
+        current_lap_series_list = []
 
-        lap_series = pd.concat([pd.Series([0]), driver_laps['LapNumber']]).reset_index(drop=True)
-        position_series = pd.concat([pd.Series([grid_pos]), driver_laps['Position']]).reset_index(drop=True)
+        # Prepend starting grid position if available
+        if grid_positions_df is not None and driver in grid_positions_df['Abbreviation'].values:
+            try:
+                grid_pos = int(grid_positions_df.loc[grid_positions_df['Abbreviation'] == driver, "Pos"].iloc[0])
+                current_lap_series_list.append(0) # Lap 0 for grid position
+                current_pos_series_list.append(grid_pos)
+            except (IndexError, ValueError) as e:
+                print(f"plot_position_changes: Could not get grid_pos for {driver}: {e}")
+                # Continue to plot lap data if available
         
+        if not driver_laps.empty:
+            current_lap_series_list.extend(driver_laps['LapNumber'])
+            current_pos_series_list.extend(driver_laps['Position'])
+        
+        if not current_lap_series_list or not current_pos_series_list:
+            continue
+            
+        lap_series = pd.Series(current_lap_series_list).reset_index(drop=True)
+        position_series = pd.Series(current_pos_series_list).reset_index(drop=True)
+
         # color helper functions don't work for earlier years
         driver_style = fastf1.plotting.get_driver_style(driver, ["color", "linestyle"], session)
         ax.plot(lap_series, position_series, label=driver, **driver_style, 
                 marker = 'o', markersize=4)
 
-        ax.text(x=text_pos, y=position_series[0]+0.2, s=driver)
+        # Place driver text at starting position
+        if position_series.empty == False:
+             ax.text(x=text_pos_x, y=position_series.iloc[0] + 0.2, s=driver)
 
-    plt.suptitle("Driver positions by lap \n"
-                f"{session.event['EventName']} {session.event.year} {session.session_info['Name']}",
-                fontsize='xx-large')
+    plt.suptitle(f"Driver positions by lap \n"
+                 f"{session.event['EventName']} {session.event.year} {session.session_info['Name']}",
+                 fontsize='xx-large')
     
     if highlight == '':
         hightlight_text = ''
     else:
         hightlight_text = f" {'_'.join(highlight)}"
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/position_changes {session.event['EventName']} {session.event.year} {session.session_info['Name']}{hightlight_text}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    driver_codes_arg = []
+    if highlight: driver_codes_arg.append(highlight)
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_position_changes.__name__,
+        session=session,
+        driver_codes=driver_codes_arg
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}",
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename
 
 
-def plot_qualifying_lap_evolution(session, fastest_laps = True, save = False): 
+@to_thread
+def plot_qualifying_laptime_evolution(session: Session, fastest_laps: bool = True) -> Optional[str]:
+    """Plot the evolution of lap times during a qualifying session.
 
+    Creates a scatter plot showing how lap times change throughout Q1, Q2, and Q3,
+    with options to show either all laps or just fastest laps.
+    The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 qualifying session to analyze.
+        fastest_laps (bool, optional): Whether to show only fastest laps (True) or all laps (False).
+            Defaults to True.
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
     fastf1.plotting.setup_mpl(misc_mpl_mods = True, color_scheme = 'fastf1')
 
     # split quali into the sessions 
@@ -1210,16 +1569,36 @@ def plot_qualifying_lap_evolution(session, fastest_laps = True, save = False):
                  f"{session.event['EventName']} {session.event.year}", 
                  fontsize='xx-large')
     
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/qualifying_lap_evolution {lap_text} {session.event['EventName']} {session.event.year} {session.session_info['Name']}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    ax.grid(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_qualifying_laptime_evolution.__name__,
+        session=session
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}",
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
 
 
-def plot_race_gaps(session, save=False, highlight: str = ''):
+@to_thread
+def plot_race_gaps(session: Session, highlight: str = '') -> Optional[str]:
+    """Plot the cumulative time gaps between drivers throughout a race.
 
+    Creates a line plot showing how the time gaps between drivers evolve during
+    the race, accounting for safety cars, VSCs, and red flags. Includes optional
+    highlighting of specific drivers. The plot is saved to the F1DATABOT_PLOT_CACHE directory.
+
+    Args:
+        session (fastf1.core.Session): The F1 race session to analyze.
+        highlight (str, optional): Comma-separated list of driver codes to highlight.
+            Defaults to '' (no highlighting).
+
+    Returns:
+        Optional[str]: The filename stem of the saved plot.
+    """
     fastf1.plotting.setup_mpl(color_scheme = 'fastf1', misc_mpl_mods = True)
 
     if not highlight == '':
@@ -1348,9 +1727,13 @@ def plot_race_gaps(session, save=False, highlight: str = ''):
     else:
         hightlight_text = f" {'_'.join(highlight)}"
 
-    if save==True:
-        plt.savefig(f"{F1DATABOT_PLOT_CACHE}/race_gaps {session.event['EventName']} {session.event.year} {session.session_info['Name']}{hightlight_text}.png", 
-                    format='png', bbox_inches='tight')
-        plt.clf()
-    else:
-        plt.show()
+    driver_codes_arg = [highlight] if highlight else None
+    filename = uf.generate_plot_filename(
+        plot_function_name=plot_race_gaps.__name__,
+        session=session,
+        driver_codes=driver_codes_arg
+    )
+    plt.savefig(f"{F1DATABOT_PLOT_CACHE}/{filename}",
+                format='png', bbox_inches='tight')
+    plt.clf()
+    return filename # Return filename stem
