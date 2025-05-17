@@ -17,11 +17,13 @@ Dependencies:
 """
 
 import functools
-import typing
+from typing import Callable, Coroutine, Any, TypeVar
 import asyncio
 
 
-def to_thread(func: typing.Callable) -> typing.Coroutine:
+T = TypeVar('T')
+
+def to_thread(func: Callable[..., T]) -> Callable[..., Coroutine[Any, Any, T]]:
     """Decorator to run a synchronous function in a separate thread.
 
     This decorator allows synchronous functions to be run asynchronously by
@@ -29,19 +31,20 @@ def to_thread(func: typing.Callable) -> typing.Coroutine:
     Useful for CPU-intensive operations or I/O-bound tasks.
 
     Args:
-        func (typing.Callable): The synchronous function to be run in a thread.
+        func (typing.Callable[..., T]): The synchronous function to be run in a thread.
 
     Returns:
-        typing.Coroutine: An awaitable coroutine that will run the function in a thread.
+        typing.Callable[..., typing.Coroutine[typing.Any, typing.Any, T]]: 
+            An awaitable coroutine that will run the function in a thread.
 
     Example:
         @to_thread
-        def cpu_intensive_function():
+        def cpu_intensive_function() -> str:
             # This will run in a separate thread
-            pass
+            return "done"
     """
     @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
+    async def wrapper(*args: Any, **kwargs: Any) -> T:
         return await asyncio.to_thread(func, *args, **kwargs)
     return wrapper
 

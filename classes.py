@@ -44,8 +44,8 @@ class DiscordBot(commands.Bot):
         - Default Discord intents
         - Message content intent (currently disabled)
         """
-        command_prefix = '$f1databot'
-        intents = discord.Intents.default()
+        command_prefix: str = '$f1databot'
+        intents: discord.Intents = discord.Intents.default()
         #intents.message_content = True
 
         super().__init__(command_prefix, intents=intents)

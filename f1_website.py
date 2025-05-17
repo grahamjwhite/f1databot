@@ -24,11 +24,12 @@ Dependencies:
 import requests
 import pandas as pd
 import io
+from typing import List, Dict
 
 from fastf1.core import Session
 
 
-def get_session_results(session: Session, data_type: str):
+def get_session_results(session: Session, data_type: str) -> pd.DataFrame:
     """Fetch session results data from the Formula 1 website.
 
     Retrieves various types of session data from the official F1 website based on the
@@ -67,22 +68,22 @@ def get_session_results(session: Session, data_type: str):
     # practice-1
 
     def countryMaker(country: str) -> str:
-        split_words = country.lower().split()
-        url_format = '-'.join(split_words)
+        split_words: List[str] = country.lower().split()
+        url_format: str = '-'.join(split_words)
 
         return url_format
 
-    race_key = session.session_info["Meeting"]["Key"]
-    country = session.session_info["Meeting"]["Country"]["Name"]
-    year = session.event.year
+    race_key: int = session.session_info["Meeting"]["Key"]
+    country: str = session.session_info["Meeting"]["Country"]["Name"]
+    year: int = session.event.year
     #baseURL = 'https://www.formula1.com/en/results/jcr:content/resultsarchive.html'
-    baseURL = 'https://www.formula1.com/en/results'
-    URLmaker = f'{baseURL}/{year}/races/{race_key}/{countryMaker(country)}/{data_type}'
+    baseURL: str = 'https://www.formula1.com/en/results'
+    URLmaker: str = f'{baseURL}/{year}/races/{race_key}/{countryMaker(country)}/{data_type}'
 
-    s = requests.Session()
+    s: requests.Session = requests.Session()
     s.head(URLmaker)
 
-    headers = {
+    headers: Dict[str, str] = {
         'Accept': '*/*',
         'Accept-Encoding': 'gzip, deflate, br, zstd',
         'Accept-Language': 'en-GB,en;q=0.9,en-US;q=0.8,en-AU;q=0.7',
@@ -92,20 +93,30 @@ def get_session_results(session: Session, data_type: str):
         'X-Requested-With': 'XMLHttpRequest'
     }
 
-    response = s.get(URLmaker, headers=headers)
+    response: requests.Response = s.get(URLmaker, headers=headers)
 
-    df = pd.read_html(io.StringIO(response.text), attrs={'class': 'f1-table'})
-    df = pd.DataFrame(df[0])
-    df = df[df.columns.drop(list(df.filter(regex='Unnamed')))] 
+    df_list: List[pd.DataFrame] = pd.read_html(io.StringIO(response.text), attrs={'class': 'f1-table'})
+    if not df_list:
+        # Handle case where no table is found
+        return pd.DataFrame() 
+        
+    df: pd.DataFrame = df_list[0]
+    # Filter columns more safely
+    cols_to_drop = [col for col in df.columns if isinstance(col, str) and col.startswith('Unnamed')]
+    df = df.drop(columns=cols_to_drop)
 
     # the website puts notes at the bottom of the table so this removes those rows
     if data_type in ["race-result", "sprint-results"]:
-        df.loc[:, 'Pts'] = pd.to_numeric(df['Pts'], errors='coerce') 
-        df = df.loc[df["Pts"].notnull(), :]
+        # Ensure 'Pts' column exists before trying to convert
+        if 'Pts' in df.columns:
+            df.loc[:, 'Pts'] = pd.to_numeric(df['Pts'], errors='coerce') 
+            df = df.loc[df["Pts"].notnull(), :]
+        else:
+            pass
 
     return df
 
-def process_pit_stop_summary(raw_data: pd.DataFrame, session: Session):
+def process_pit_stop_summary(raw_data: pd.DataFrame, session: Session) -> pd.DataFrame:
     """Process and clean pit stop summary data.
 
     Processes raw pit stop data by:
@@ -125,18 +136,28 @@ def process_pit_stop_summary(raw_data: pd.DataFrame, session: Session):
             - Session time for each stop
             - Cleaned column structure
     """
-
-    raw_data["Abbreviation"] = raw_data.Driver.str.slice(start=-3)
-    raw_data["cumu_time"] = raw_data.loc[:, ["Abbreviation", "Time"]].groupby('Abbreviation').cumsum()
+    # Create a copy to avoid SettingWithCopyWarning
+    processed_data = raw_data.copy()
+    processed_data["Abbreviation"] = processed_data.Driver.str.slice(start=-3)
+    processed_data["cumu_time"] = processed_data.loc[:, ["Abbreviation", "Time"]].groupby('Abbreviation').cumsum() # This line often causes issues if 'Time' isn't numeric
+    
+    # Convert time columns carefully
     race_start = session.date 
-    race_start_str = f'{race_start.year}/{race_start.month}/{race_start.day} '
-    raw_data["time_of_day"] = pd.to_datetime(race_start_str + raw_data["Time of day"], format='%Y/%m/%d %H:%M:%S')
-    raw_data["session_time"] = raw_data.time_of_day - race_start - session.session_info["GmtOffset"]
-    raw_data = raw_data[raw_data.columns.drop(["No", "Driver", "Time of day"])]
+    race_start_str: str = f'{race_start.year}/{race_start.month}/{race_start.day} '
+    # Ensure 'Time of day' column exists and is string
+    if 'Time of day' in processed_data.columns:
+        processed_data["time_of_day"] = pd.to_datetime(race_start_str + processed_data["Time of day"].astype(str), format='%Y/%m/%d %H:%M:%S', errors='coerce')
+        # Calculate session_time only if time_of_day conversion was successful
+        valid_times = processed_data["time_of_day"].notna()
+        processed_data.loc[valid_times, "session_time"] = (processed_data.loc[valid_times, "time_of_day"] - race_start - session.session_info["GmtOffset"])
 
-    return raw_data
+    # Drop columns safely
+    cols_to_drop = ["No", "Driver", "Time of day"]
+    processed_data = processed_data.drop(columns=[col for col in cols_to_drop if col in processed_data.columns])
 
-def process_starting_grid(raw_data: pd.DataFrame):
+    return processed_data
+
+def process_starting_grid(raw_data: pd.DataFrame) -> pd.DataFrame:
     """Process and clean starting grid data.
 
     Processes raw starting grid data by:
@@ -151,13 +172,13 @@ def process_starting_grid(raw_data: pd.DataFrame):
             - Driver abbreviations
             - Cleaned column structure
     """
+    processed_data = raw_data.copy()
+    processed_data["Abbreviation"] = processed_data.Driver.str.slice(start=-3)
+    cols_to_drop = ["No", "Driver"]
+    processed_data = processed_data.drop(columns=[col for col in cols_to_drop if col in processed_data.columns])
+    return processed_data
 
-    raw_data["Abbreviation"] = raw_data.Driver.str.slice(start=-3)
-    raw_data = raw_data[raw_data.columns.drop(["No", "Driver"])]
-
-    return raw_data
-
-def process_race_result(raw_data: pd.DataFrame):
+def process_race_result(raw_data: pd.DataFrame) -> pd.DataFrame:
     """Process and clean race result data.
 
     Processes raw race result data by:
@@ -172,13 +193,13 @@ def process_race_result(raw_data: pd.DataFrame):
             - Driver abbreviations
             - Cleaned column structure
     """
+    processed_data = raw_data.copy()
+    processed_data["Abbreviation"] = processed_data.Driver.str.slice(start=-3)
+    cols_to_drop = ["No", "Driver"]
+    processed_data = processed_data.drop(columns=[col for col in cols_to_drop if col in processed_data.columns])
+    return processed_data
 
-    raw_data["Abbreviation"] = raw_data.Driver.str.slice(start=-3)
-    raw_data = raw_data[raw_data.columns.drop(["No", "Driver"])]
-
-    return raw_data
-
-def process_qualifying_results(raw_data: pd.DataFrame):
+def process_qualifying_results(raw_data: pd.DataFrame) -> pd.DataFrame:
     """Process and clean qualifying results data.
 
     Processes raw qualifying results data by:
@@ -193,8 +214,8 @@ def process_qualifying_results(raw_data: pd.DataFrame):
             - Driver abbreviations
             - Cleaned column structure
     """
-
-    raw_data["Abbreviation"] = raw_data.Driver.str.slice(start=-3)
-    raw_data = raw_data[raw_data.columns.drop(["No", "Driver"])]
-
-    return raw_data
+    processed_data = raw_data.copy()
+    processed_data["Abbreviation"] = processed_data.Driver.str.slice(start=-3)
+    cols_to_drop = ["No", "Driver"]
+    processed_data = processed_data.drop(columns=[col for col in cols_to_drop if col in processed_data.columns])
+    return processed_data
