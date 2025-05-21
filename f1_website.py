@@ -219,3 +219,27 @@ def process_qualifying_results(raw_data: pd.DataFrame) -> pd.DataFrame:
     cols_to_drop = ["No", "Driver"]
     processed_data = processed_data.drop(columns=[col for col in cols_to_drop if col in processed_data.columns])
     return processed_data
+
+
+if __name__ == "__main__":
+    import fastf1
+    from constants import F1DATABOT_DATA_CACHE
+    
+    # Enable cache for faster loading
+    fastf1.Cache.enable_cache(F1DATABOT_DATA_CACHE)
+    
+    # Load the 2025 Saudi Arabian Grand Prix race session
+    session = fastf1.get_session(2025, 'Miami Grand Prix', 'S')
+    session.load()
+    
+    # Get raw race results from F1 website
+    raw_results = get_session_results(session, 'race-result')
+    
+    # Process the results to clean up the data
+    processed_results = process_race_result(raw_results)
+    
+    # Display the processed results
+    print("\nProcessed Race Results:")
+    print(processed_results)
+
+    
